@@ -3,42 +3,6 @@
 import React, { useMemo, useState, useCallback } from "react";
 import { DndContext, useDraggable, useDroppable, DragEndEvent, DragStartEvent, PointerSensor, MouseSensor, useSensor, useSensors, DragOverlay, closestCenter, pointerWithin, DragOverEvent } from "@dnd-kit/core";
 
-
-// --- drag-only scroll lock helpers (inserted by assistant) ---
-let __scrollY_for_lock = 0;
-
-function lockBodyScroll() {
-    if (typeof document === "undefined") return;
-    const b = document.body as HTMLBodyElement;
-    __scrollY_for_lock = window.scrollY || window.pageYOffset || 0;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    b.style.position = "fixed";
-    b.style.top = `-${__scrollY_for_lock}px`;
-    b.style.left = "0";
-    b.style.right = "0";
-    b.style.width = "100%";
-    b.style.overflow = "hidden";
-    if (scrollbarWidth > 0) {
-        b.style.paddingRight = `${scrollbarWidth}px`;
-    }
-}
-
-function unlockBodyScroll() {
-    if (typeof document === "undefined") return;
-    const b = document.body as HTMLBodyElement;
-    const y = __scrollY_for_lock || 0;
-    b.style.position = "";
-    b.style.top = "";
-    b.style.left = "";
-    b.style.right = "";
-    b.style.width = "";
-    b.style.overflow = "";
-    b.style.paddingRight = "";
-    window.scrollTo(0, y);
-}
-// --- end helpers ---
-
-
 const ROWS = 8;
 const COLS = 12;
 const toRowLabel = (i: number) => String.fromCharCode("A".charCodeAt(0) + i);
@@ -194,12 +158,7 @@ function Well({ wellId, assigned, onClear, samples, onWellHover, selectedSampleI
 }
 
 export default function Page() {
-    React.useEffect(() => {
-        return () => {
-            // Clean up any accidental scroll locks from drag or errors
-            try { unlockBodyScroll(); } catch {}
-        };
-    }, []);
+    const sampleListRef = React.useRef<HTMLDivElement>(null);
 
     const sensors = useSensors(
         useSensor(MouseSensor, {
@@ -254,7 +213,6 @@ export default function Page() {
     };
 
     const onDragStart = (e: DragStartEvent) => {
-        lockBodyScroll();
         const id = String(e.active.id);
         setActiveId(id);
         if (!selectedIds.includes(id)) {
@@ -269,7 +227,6 @@ export default function Page() {
     };
 
     const onDragEnd = (e: DragEndEvent) => {
-        unlockBodyScroll();
         const sampleId = String(e.active.id);
         const dropId = e.over?.id ? String(e.over.id) : null;
         setActiveId(null);
@@ -655,7 +612,7 @@ export default function Page() {
                             </button>
                         </div>
 
-                        <div style={{ overflow: "auto", display: "grid", gap: 8, paddingRight: 4, border: "1px solid var(--border)", borderRadius: 10, padding: 10, background: "#fff" }}>
+                        <div style={{ overflow: "auto", display: "grid", gap: 8, paddingRight: 4, border: "1px solid var(--border)", borderRadius: 10, padding: 10, background: "#fff" }} ref={sampleListRef}>
                             {samples.map(s => (
                                 <DraggableSample
                                     key={s.id}
