@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useCallback } from "react";
 import { DndContext, useDraggable, useDroppable, DragEndEvent, DragStartEvent, PointerSensor, MouseSensor, useSensor, useSensors, DragOverlay, closestCenter, pointerWithin, DragOverEvent } from "@dnd-kit/core";
+import ClientOnly from "./ClientOnly";
 
 const ROWS = 8;
 const COLS = 12;
@@ -158,8 +159,6 @@ function Well({ wellId, assigned, onClear, samples, onWellHover, selectedSampleI
 }
 
 export default function Page() {
-    const sampleListRef = React.useRef<HTMLDivElement>(null);
-
     const sensors = useSensors(
         useSensor(MouseSensor, {
             activationConstraint: {
@@ -546,253 +545,255 @@ export default function Page() {
         }
       `}</style>
 
-            <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} collisionDetection={pointerWithin}>
-                <div
-                    style={{
-                        display: "flex",
-                        width: "100vw",
-                        height: "100vh",
-                        overflow: "hidden",
-                        position: "fixed",
-                        top: 0,
-                        left: 0
-                    }}
-                    onMouseUp={handleMouseUp}
-                >
-
-                    <section style={{
-                        width: "280px",
-                        minWidth: "280px",
-                        display: "grid",
-                        gridTemplateRows: "auto auto 1fr",
-                        gap: 12,
-                        padding: 20,
-                        paddingRight: 10,
-                        background: "#fff",
-                        borderRight: "1px solid var(--border)",
-                        position: "fixed",
-                        left: 0,
-                        top: 0,
-                        height: "100vh",
-                        zIndex: 1000
-                    }}>
-                        <div style={{ fontWeight: 600, fontSize: 18 }}>Samples</div>
-
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button
-                                onClick={() => {
-                                    if (selectedIds.length === 1) {
-                                        // If exactly one sample is selected, start from that sample
-                                        const currentIndex = samples.findIndex(s => s.id === selectedIds[0]);
-                                        if (currentIndex !== -1) {
-                                            // Select 96 samples starting from current selection, no wraparound
-                                            const endIndex = Math.min(currentIndex + ROWS * COLS, samples.length);
-                                            const newSelection = samples.slice(currentIndex, endIndex).map(s => s.id);
-                                            setSelectedIds(newSelection);
-                                        }
-                                    } else {
-                                        // Default behavior - select first 96 samples
-                                        setSelectedIds(samples.slice(0, ROWS * COLS).map(s => s.id));
-                                    }
-                                }}
-                                style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
-                                title={
-                                    selectedIds.length === 1
-                                        ? `Select ${ROWS * COLS} samples starting from current selection`
-                                        : `Select first ${ROWS * COLS} samples`
-                                }
-                            >
-                                Select {ROWS * COLS}
-                            </button>
-                            <button
-                                onClick={() => setSelectedIds([])}
-                                style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
-                            >
-                                Clear selection
-                            </button>
-                        </div>
-
-                        <div style={{ overflow: "auto", display: "grid", gap: 8, paddingRight: 4, border: "1px solid var(--border)", borderRadius: 10, padding: 10, background: "#fff" }} ref={sampleListRef}>
-                            {samples.map(s => (
-                                <DraggableSample
-                                    key={s.id}
-                                    sample={s}
-                                    selected={selectedIds.includes(s.id)}
-                                    onToggleSelect={onToggleSelect}
-                                    isHighlighted={hoveredWellSampleId === s.id}
-                                    onSampleHover={handleSampleHover}
-                                    hasPlacement={samplesWithPlacements.has(s.id)}
-                                    isHovered={hoveredSample === s.id}
-                                />
-                            ))}
-                        </div>
-                    </section>
-
-                    <section
+            <ClientOnly>
+                <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} collisionDetection={pointerWithin}>
+                    <div
                         style={{
-                            marginLeft: "300px",
-                            padding: 20,
-                            flex: 1,
-                            overflow: "auto",
-                            height: "100vh"
+                            display: "flex",
+                            width: "100vw",
+                            height: "100vh",
+                            overflow: "hidden",
+                            position: "fixed",
+                            top: 0,
+                            left: 0
                         }}
-                        onClick={(e) => {
-                            // Clear well selection if clicking outside the plate area
-                            if (e.target === e.currentTarget) {
-                                setSelectedWells([]);
-                            }
-                        }}
+                        onMouseUp={handleMouseUp}
                     >
-                        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                            <div style={{ fontWeight: 600, fontSize: 18 }}>96-well Plate</div>
-                            <div style={{ fontSize: 13, opacity: 0.8 }}>Unassigned wells: {unassignedCount}</div>
-                        </div>
 
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                            <label style={{ fontSize: 14 }}>
-                                Start at:&nbsp;
-                                <select
-                                    value={startWell}
-                                    onChange={(e) => setStartWell(e.target.value)}
-                                    style={{ padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)" }}
-                                >
-                                    {wells.flat().map(id => <option key={id} value={id}>{id}</option>)}
-                                </select>
-                            </label>
-
-                            <button
-                                onClick={(e) => {
-                                    setFillMode("rows");
-                                    if (allSelectedIs96) {
-                                        fillWithSelection("rows");
-                                    }
-                                }}
-                                style={{
-                                    padding: "6px 10px",
-                                    border: fillMode === "rows" ? "2px solid #2563eb" : "1px solid var(--border)",
-                                    borderRadius: 8,
-                                    background: fillMode === "rows" ? "#e6f0ff" : (allSelectedIs96 ? "#fff" : "#f3f3f3"),
-                                    opacity: allSelectedIs96 ? 1 : 0.8
-                                }}
-                                title={allSelectedIs96 ? "Fill row by row (A1..A12, B1..B12, ...)" : "Set drag mode to fill by rows"}
-                            >
-                                Fill by Rows
-                            </button>
-                            <button
-                                onClick={(e) => {
-                                    setFillMode("cols");
-                                    if (allSelectedIs96) {
-                                        fillWithSelection("cols");
-                                    }
-                                }}
-                                style={{
-                                    padding: "6px 10px",
-                                    border: fillMode === "cols" ? "2px solid #2563eb" : "1px solid var(--border)",
-                                    borderRadius: 8,
-                                    background: fillMode === "cols" ? "#e6f0ff" : (allSelectedIs96 ? "#fff" : "#f3f3f3"),
-                                    opacity: allSelectedIs96 ? 1 : 0.8
-                                }}
-                                title={allSelectedIs96 ? "Fill column by column (A1..H1, A2..H2, ...)" : "Set drag mode to fill by columns"}
-                            >
-                                Fill by Columns
-                            </button>
-
-                            <button
-                                disabled={selectedWells.length === 0}
-                                onClick={clearSelectedWells}
-                                style={{
-                                    padding: "6px 10px",
-                                    border: "1px solid var(--border)",
-                                    borderRadius: 8,
-                                    background: selectedWells.length > 0 ? "#fff" : "#f3f3f3",
-                                    opacity: selectedWells.length > 0 ? 1 : 0.6
-                                }}
-                                title={`Clear ${selectedWells.length} selected well${selectedWells.length !== 1 ? 's' : ''}`}
-                            >
-                                Clear selected ({selectedWells.length})
-                            </button>
-
-                            <button
-                                onClick={clearPlate}
-                                style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
-                                title="Clear all assignments"
-                            >
-                                Clear Plate
-                            </button>
-                        </div>
-
-                        <div style={{ width: "fit-content", padding: 12, border: "1px solid var(--border)", borderRadius: 12, background: "#fff" }}>
-                            <div style={{ display: "inline-grid", gridTemplateColumns: `auto repeat(${COLS}, 34px)`, gap: 8 }}>
-                                <div />
-                                {Array.from({ length: COLS }, (_, c) => (
-                                    <div key={c} style={{ textAlign: "center", fontSize: 12 }}>{c + 1}</div>
-                                ))}
-
-                                {wells.map((row, r) => (
-                                    <React.Fragment key={r}>
-                                        <div style={{ alignSelf: "center", fontSize: 12, width: 18, textAlign: "right" }}>{toRowLabel(r)}</div>
-                                        {row.map((id) => (
-                                            <div
-                                                key={id}
-                                                style={{
-                                                    width: 34,
-                                                    height: 34,
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    background: selectedWells.includes(id) ? "#e3f2fd" : "transparent",
-                                                    border: selectedWells.includes(id) ? "2px solid #2196f3" : "2px solid transparent",
-                                                    borderRadius: 4
-                                                }}
-                                            >
-                                                <Well
-                                                    wellId={id}
-                                                    assigned={assignments[id]}
-                                                    onClear={clearWell}
-                                                    samples={samples}
-                                                    onWellHover={handleWellHover}
-                                                    selectedSampleIds={selectedIds}
-                                                    isHighlighted={wellsToHighlight.includes(id)}
-                                                    onWellClick={handleWellClick}
-                                                    isHoveredSample={wellsToHighlightHovered.includes(id)}
-                                                    isWellHovered={hoveredWell === id}
-                                                    isSelected={selectedWells.includes(id)}
-                                                    onWellMouseDown={handleWellMouseDown}
-                                                    onWellMouseEnter={handleWellMouseEnter}
-                                                />
-                                            </div>
-                                        ))}
-                                    </React.Fragment>
-                                ))}
-                            </div>
-
-                            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-                                • Drag samples onto wells to assign. Double-click wells to clear.<br />
-                                • Click wells to select samples. Ctrl/Cmd-click for multi-select, drag between wells for rectangle selection.<br />
-                                • Select exactly {ROWS * COLS} samples to enable Fill by Rows/Columns buttons.
-                            </div>
-                        </div>
-                    </section>
-                </div>
-
-                <DragOverlay>
-                    {activeId ? (
-                        <div style={{
-                            padding: "8px 10px",
-                            border: "1px solid var(--border)",
-                            borderRadius: 10,
-                            background: "var(--accent)",
-                            userSelect: "none",
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                            cursor: "grabbing",
-                            pointerEvents: "none",
-                            zIndex: 9999
+                        <section style={{
+                            width: "280px",
+                            minWidth: "280px",
+                            display: "grid",
+                            gridTemplateRows: "auto auto 1fr",
+                            gap: 12,
+                            padding: 20,
+                            paddingRight: 10,
+                            background: "#fff",
+                            borderRight: "1px solid var(--border)",
+                            position: "fixed",
+                            left: 0,
+                            top: 0,
+                            height: "100vh",
+                            zIndex: 1000
                         }}>
-                            {samples.find(s => s.id === activeId)?.name}
-                        </div>
-                    ) : null}
-                </DragOverlay>
-            </DndContext>
+                            <div style={{ fontWeight: 600, fontSize: 18 }}>Samples</div>
+
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button
+                                    onClick={() => {
+                                        if (selectedIds.length === 1) {
+                                            // If exactly one sample is selected, start from that sample
+                                            const currentIndex = samples.findIndex(s => s.id === selectedIds[0]);
+                                            if (currentIndex !== -1) {
+                                                // Select 96 samples starting from current selection, no wraparound
+                                                const endIndex = Math.min(currentIndex + ROWS * COLS, samples.length);
+                                                const newSelection = samples.slice(currentIndex, endIndex).map(s => s.id);
+                                                setSelectedIds(newSelection);
+                                            }
+                                        } else {
+                                            // Default behavior - select first 96 samples
+                                            setSelectedIds(samples.slice(0, ROWS * COLS).map(s => s.id));
+                                        }
+                                    }}
+                                    style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+                                    title={
+                                        selectedIds.length === 1
+                                            ? `Select ${ROWS * COLS} samples starting from current selection`
+                                            : `Select first ${ROWS * COLS} samples`
+                                    }
+                                >
+                                    Select {ROWS * COLS}
+                                </button>
+                                <button
+                                    onClick={() => setSelectedIds([])}
+                                    style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+                                >
+                                    Clear selection
+                                </button>
+                            </div>
+
+                            <div style={{ overflow: "auto", display: "grid", gap: 8, paddingRight: 4, border: "1px solid var(--border)", borderRadius: 10, padding: 10, background: "#fff" }}>
+                                {samples.map(s => (
+                                    <DraggableSample
+                                        key={s.id}
+                                        sample={s}
+                                        selected={selectedIds.includes(s.id)}
+                                        onToggleSelect={onToggleSelect}
+                                        isHighlighted={hoveredWellSampleId === s.id}
+                                        onSampleHover={handleSampleHover}
+                                        hasPlacement={samplesWithPlacements.has(s.id)}
+                                        isHovered={hoveredSample === s.id}
+                                    />
+                                ))}
+                            </div>
+                        </section>
+
+                        <section
+                            style={{
+                                marginLeft: "300px",
+                                padding: 20,
+                                flex: 1,
+                                overflow: "auto",
+                                height: "100vh"
+                            }}
+                            onClick={(e) => {
+                                // Clear well selection if clicking outside the plate area
+                                if (e.target === e.currentTarget) {
+                                    setSelectedWells([]);
+                                }
+                            }}
+                        >
+                            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                                <div style={{ fontWeight: 600, fontSize: 18 }}>96-well Plate</div>
+                                <div style={{ fontSize: 13, opacity: 0.8 }}>Unassigned wells: {unassignedCount}</div>
+                            </div>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                <label style={{ fontSize: 14 }}>
+                                    Start at:&nbsp;
+                                    <select
+                                        value={startWell}
+                                        onChange={(e) => setStartWell(e.target.value)}
+                                        style={{ padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)" }}
+                                    >
+                                        {wells.flat().map(id => <option key={id} value={id}>{id}</option>)}
+                                    </select>
+                                </label>
+
+                                <button
+                                    onClick={(e) => {
+                                        setFillMode("rows");
+                                        if (allSelectedIs96) {
+                                            fillWithSelection("rows");
+                                        }
+                                    }}
+                                    style={{
+                                        padding: "6px 10px",
+                                        border: fillMode === "rows" ? "2px solid #2563eb" : "1px solid var(--border)",
+                                        borderRadius: 8,
+                                        background: fillMode === "rows" ? "#e6f0ff" : (allSelectedIs96 ? "#fff" : "#f3f3f3"),
+                                        opacity: allSelectedIs96 ? 1 : 0.8
+                                    }}
+                                    title={allSelectedIs96 ? "Fill row by row (A1..A12, B1..B12, ...)" : "Set drag mode to fill by rows"}
+                                >
+                                    Fill by Rows
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        setFillMode("cols");
+                                        if (allSelectedIs96) {
+                                            fillWithSelection("cols");
+                                        }
+                                    }}
+                                    style={{
+                                        padding: "6px 10px",
+                                        border: fillMode === "cols" ? "2px solid #2563eb" : "1px solid var(--border)",
+                                        borderRadius: 8,
+                                        background: fillMode === "cols" ? "#e6f0ff" : (allSelectedIs96 ? "#fff" : "#f3f3f3"),
+                                        opacity: allSelectedIs96 ? 1 : 0.8
+                                    }}
+                                    title={allSelectedIs96 ? "Fill column by column (A1..H1, A2..H2, ...)" : "Set drag mode to fill by columns"}
+                                >
+                                    Fill by Columns
+                                </button>
+
+                                <button
+                                    disabled={selectedWells.length === 0}
+                                    onClick={clearSelectedWells}
+                                    style={{
+                                        padding: "6px 10px",
+                                        border: "1px solid var(--border)",
+                                        borderRadius: 8,
+                                        background: selectedWells.length > 0 ? "#fff" : "#f3f3f3",
+                                        opacity: selectedWells.length > 0 ? 1 : 0.6
+                                    }}
+                                    title={`Clear ${selectedWells.length} selected well${selectedWells.length !== 1 ? 's' : ''}`}
+                                >
+                                    Clear selected ({selectedWells.length})
+                                </button>
+
+                                <button
+                                    onClick={clearPlate}
+                                    style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+                                    title="Clear all assignments"
+                                >
+                                    Clear Plate
+                                </button>
+                            </div>
+
+                            <div style={{ width: "fit-content", padding: 12, border: "1px solid var(--border)", borderRadius: 12, background: "#fff" }}>
+                                <div style={{ display: "inline-grid", gridTemplateColumns: `auto repeat(${COLS}, 34px)`, gap: 8 }}>
+                                    <div />
+                                    {Array.from({ length: COLS }, (_, c) => (
+                                        <div key={c} style={{ textAlign: "center", fontSize: 12 }}>{c + 1}</div>
+                                    ))}
+
+                                    {wells.map((row, r) => (
+                                        <React.Fragment key={r}>
+                                            <div style={{ alignSelf: "center", fontSize: 12, width: 18, textAlign: "right" }}>{toRowLabel(r)}</div>
+                                            {row.map((id) => (
+                                                <div
+                                                    key={id}
+                                                    style={{
+                                                        width: 34,
+                                                        height: 34,
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        background: selectedWells.includes(id) ? "#e3f2fd" : "transparent",
+                                                        border: selectedWells.includes(id) ? "2px solid #2196f3" : "2px solid transparent",
+                                                        borderRadius: 4
+                                                    }}
+                                                >
+                                                    <Well
+                                                        wellId={id}
+                                                        assigned={assignments[id]}
+                                                        onClear={clearWell}
+                                                        samples={samples}
+                                                        onWellHover={handleWellHover}
+                                                        selectedSampleIds={selectedIds}
+                                                        isHighlighted={wellsToHighlight.includes(id)}
+                                                        onWellClick={handleWellClick}
+                                                        isHoveredSample={wellsToHighlightHovered.includes(id)}
+                                                        isWellHovered={hoveredWell === id}
+                                                        isSelected={selectedWells.includes(id)}
+                                                        onWellMouseDown={handleWellMouseDown}
+                                                        onWellMouseEnter={handleWellMouseEnter}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </React.Fragment>
+                                    ))}
+                                </div>
+
+                                <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
+                                    • Drag samples onto wells to assign. Double-click wells to clear.<br />
+                                    • Click wells to select samples. Ctrl/Cmd-click for multi-select, drag between wells for rectangle selection.<br />
+                                    • Select exactly {ROWS * COLS} samples to enable Fill by Rows/Columns buttons.
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <DragOverlay>
+                        {activeId ? (
+                            <div style={{
+                                padding: "8px 10px",
+                                border: "1px solid var(--border)",
+                                borderRadius: 10,
+                                background: "var(--accent)",
+                                userSelect: "none",
+                                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                                cursor: "grabbing",
+                                pointerEvents: "none",
+                                zIndex: 9999
+                            }}>
+                                {samples.find(s => s.id === activeId)?.name}
+                            </div>
+                        ) : null}
+                    </DragOverlay>
+                </DndContext>
+            </ClientOnly>
         </>
     );
 }
