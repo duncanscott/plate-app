@@ -1,3 +1,6 @@
+// app/layout.tsx
+import "./globals.css"; // ← add this line
+
 export const metadata = { title: "Plate App", description: "96/384-well plate editor" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
