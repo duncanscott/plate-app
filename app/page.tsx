@@ -58,7 +58,7 @@ function DraggableSample({ sample, selected, onToggleSelect, isHighlighted, onSa
         return;
       }
       // Otherwise, call the original handler
-      if (listeners.onPointerDown) {
+      if (listeners?.onPointerDown) {
         listeners.onPointerDown(e);
       }
     }
@@ -476,7 +476,7 @@ export default function Page() {
       // Get samples from selected wells and select them
       const samplesInSelectedWells = selectedWells
         .map(wellId => assignments[wellId])
-        .filter(Boolean); // Remove undefined values
+        .filter((sampleId): sampleId is string => Boolean(sampleId)); // Remove undefined values
       
       if (samplesInSelectedWells.length > 0) {
         // Select all samples found in the selected wells
