@@ -1,0 +1,518 @@
+Skip to content
+Chat history
+
+This is a copy of a conversation between ChatGPT & Anonymous.
+
+Report conversation
+You said:
+Are there any good JavaScript / CSS tools for representing 96 and 384-well plates in a biology laboratory?  I would like to develop for React with the ability to drag sample objects into wells.
+ChatGPT said:
+
+Thought for 26s
+Yep—there are a few solid options, plus an easy path to rolling your own React component with drag-and-drop.
+
+Purpose-built libraries
+react-well-plates (MIT). Simple React components that render 6/12/24/48/96/384/1536-well layouts with row/column labels. Great as a base; you can layer drag-and-drop on top.
+npm
+GitHub
+
+NEB “plate-map”. An open-source JS tool from New England Biolabs focused on editing/visualizing plate layouts; useful ideas and code if you want richer layout editing.
+GitHub
+
+Opentrons Labware Library. Not a React plate component per se, but it gives you canonical labware JSON (96/384/1536, well shapes/offsets) that you can consume for accurate geometry/naming (A1…H12, etc.).
+labware.opentrons.com
+support.opentrons.com
+
+Inspiration: Welly shows a web UI where users drag sample names onto 96/384-well plates (paper + screenshots)—handy for UX ideas.
+Oxford Academic
++1
+
+Drag-and-drop for React (to combine with any plate UI)
+dnd-kit — modern, lightweight, accessible; excellent for grid drag/drop.
+dndkit.com
+GitHub
+npm
+
+React DnD — mature alternative with lots of examples.
+GitHub
+react-dnd.github.io
+
+(If you’re starting fresh, I’d pick dnd-kit.)
+
+Minimal starter (React + dnd-kit)
+This shows a draggable sample list and a 96-well grid of droppable wells. Switch to 384 by changing rows/cols to 16×24.
+
+import React, { useMemo, useState } from "react";
+import { DndContext, useDraggable, useDroppable, DragEndEvent } from "@dnd-kit/core";
+
+const ROWS = 8;   // 16 for 384
+const COLS = 12;  // 24 for 384
+const rowLabel = (i: number) => String.fromCharCode("A".charCodeAt(0) + i);
+
+function DraggableSample({ id, label }: { id: string; label: string }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
+  const style: React.CSSProperties = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    opacity: isDragging ? 0.6 : 1, cursor: "grab", padding: 8, border: "1px solid #ddd", borderRadius: 8
+  };
+  return (
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>{label}</div>
+  );
+}
+
+function Well({ wellId, assigned }: { wellId: string; assigned?: string }) {
+  const { isOver, setNodeRef } = useDroppable({ id: wellId });
+  const style: React.CSSProperties = {
+    width: 28, height: 28, borderRadius: "50%",
+    display: "grid", placeItems: "center",
+    background: assigned ? "#bfe5bf" : (isOver ? "#e6f0ff" : "#f7f7f7"),
+    border: "1px solid #d0d0d0", fontSize: 10, userSelect: "none"
+  };
+  return <div ref={setNodeRef} style={style} title={wellId}>{assigned ? "•" : ""}</div>;
+}
+
+export default function PlateDemo() {
+  const wells = useMemo(
+    () => Array.from({ length: ROWS }, (_, r) =>
+      Array.from({ length: COLS }, (_, c) => `${rowLabel(r)}${c + 1}`)), []);
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const samples = [{ id: "S1", label: "Sample 1" }, { id: "S2", label: "Sample 2" }, { id: "S3", label: "Control" }];
+
+  const onDragEnd = (e: DragEndEvent) => {
+    const sampleId = e.active?.id as string;
+    const wellId = (e.over?.id as string) || null;
+    if (sampleId && wellId) setAssignments(prev => ({ ...prev, [wellId]: sampleId }));
+  };
+
+  return (
+    <DndContext onDragEnd={onDragEnd}>
+      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 24 }}>
+        <div style={{ display: "grid", gap: 8 }}>
+          {samples.map(s => <DraggableSample key={s.id} id={s.id} label={s.label} />)}
+        </div>
+        <div style={{ display: "inline-grid", gridTemplateColumns: `auto repeat(${COLS}, 32px)`, gap: 6 }}>
+          {/* column headers */}
+          <div />
+          {Array.from({ length: COLS }, (_, c) => <div key={c} style={{ textAlign: "center", fontSize: 12 }}>{c + 1}</div>)}
+          {/* rows */}
+          {wells.map((row, r) => (
+            <React.Fragment key={r}>
+              <div style={{ alignSelf: "center", fontSize: 12 }}>{rowLabel(r)}</div>
+              {row.map(id => <Well key={id} wellId={id} assigned={assignments[id]} />)}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    </DndContext>
+  );
+}
+Why this approach works
+
+It keeps the plate purely presentational (rows/cols + labels), so you can swap in Opentrons labware geometry later (e.g., square vs round wells, offsets, 1536-well).
+labware.opentrons.com
+
+dnd-kit gives you keyboard-accessible drag/drop and “multiple containers” patterns for plates + trash bin + source racks.
+dndkit.com
+CodeSandbox
+
+If you want, I can adapt this into a small reusable <WellPlate /> package (props for size, well shape, colors/heatmap, disabled wells, copy/paste layouts, export as CSV/Opentrons JSON).
+
+You said:
+Can you generate a Next.js React app that uses this approach or another one?  Assume a list of Sample objects with draggable tabs that can be added to any well.  If a group of 96 sample tabs is selected there should be an option to add them to the plate either by rows or columns in order.
+ChatGPT said:
+
+Thought for 9s
+Absolutely—here’s a complete, minimal Next.js (App Router) + dnd-kit project with a 96-well plate UI, draggable “sample tabs,” multi-select, and one-click Fill by Rows/Columns when exactly 96 samples are selected. You can extend it to 384 wells by changing a couple constants.
+
+Project structure
+plate-app/
+  package.json
+  tsconfig.json
+  next.config.js
+  app/layout.tsx
+  app/page.tsx
+  app/globals.css
+package.json
+{
+  "name": "plate-app",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "6.3.1",
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "typescript": "^5.4.5"
+  }
+}
+tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "types": ["node", "react", "react-dom"]
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}
+next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {};
+module.exports = nextConfig;
+app/layout.tsx
+export const metadata = { title: "Plate App", description: "96/384-well plate editor" };
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body style={{ margin: 0, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
+        {children}
+      </body>
+    </html>
+  );
+}
+app/globals.css
+* { box-sizing: border-box; }
+:root { --border:#d0d0d0; --muted:#f7f7f7; --accent:#e6f0ff; --green:#bfe5bf; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; }
+app/page.tsx
+"use client";
+
+import React, { useMemo, useState, useCallback } from "react";
+import { DndContext, useDraggable, useDroppable, DragEndEvent, DragStartEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+
+/** ==== Plate geometry (switch to 384 by setting ROWS=16, COLS=24) ==== */
+const ROWS = 8;
+const COLS = 12;
+const toRowLabel = (i: number) => String.fromCharCode("A".charCodeAt(0) + i);
+const toWellId = (r: number, c: number) => `${toRowLabel(r)}${c + 1}`;
+const parseWellId = (wellId: string) => {
+  const row = wellId.charCodeAt(0) - "A".charCodeAt(0);
+  const col = parseInt(wellId.slice(1), 10) - 1;
+  return { row, col };
+};
+
+type Sample = { id: string; name: string };
+type Assignments = Record<string, string | undefined>; // wellId -> sampleId
+
+/** Create a demo sample list. Change to 384 if you like. */
+function makeSamples(n = 120): Sample[] {
+  return Array.from({ length: n }, (_, i) => ({ id: `S${i + 1}`, name: `Sample ${i + 1}` }));
+}
+
+/** ======= Draggable sample tab ======= */
+function DraggableSample({ sample, selected, onToggleSelect }: { sample: Sample; selected: boolean; onToggleSelect: (id: string, multi?: boolean, range?: boolean) => void; }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: sample.id });
+  const style: React.CSSProperties = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    opacity: isDragging ? 0.6 : 1,
+    cursor: "grab",
+    padding: "8px 10px",
+    border: "1px solid var(--border)",
+    borderRadius: 10,
+    background: selected ? "var(--accent)" : "white",
+    userSelect: "none",
+    boxShadow: selected ? "0 0 0 2px #bcd6ff inset" : undefined,
+  };
+
+  const handleClick: React.MouseEventHandler = (e) => {
+    onToggleSelect(sample.id, e.metaKey || e.ctrlKey, e.shiftKey);
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes} onClick={handleClick} title={sample.name}>
+      {sample.name}
+    </div>
+  );
+}
+
+/** ======= Droppable well ======= */
+function Well({ wellId, assigned, onClear }: { wellId: string; assigned?: string; onClear: (wellId: string) => void; }) {
+  const { isOver, setNodeRef } = useDroppable({ id: wellId });
+  const style: React.CSSProperties = {
+    width: 30, height: 30, borderRadius: "50%",
+    display: "grid", placeItems: "center",
+    background: assigned ? "var(--green)" : (isOver ? "var(--accent)" : "var(--muted)"),
+    border: "1px solid var(--border)",
+    fontSize: 11, lineHeight: 1, userSelect: "none"
+  };
+  return (
+    <div ref={setNodeRef} style={style} title={wellId} onDoubleClick={() => onClear(wellId)}>
+      {assigned ? "•" : ""}
+    </div>
+  );
+}
+
+/** ======= Main page ======= */
+export default function Page() {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const wells = useMemo(
+    () => Array.from({ length: ROWS }, (_, r) => Array.from({ length: COLS }, (_, c) => toWellId(r, c))),
+    []
+  );
+
+  // Samples + selection
+  const [samples] = useState<Sample[]>(() => makeSamples(120));
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+
+  // Well assignments
+  const [assignments, setAssignments] = useState<Assignments>({});
+
+  const onToggleSelect = useCallback((id: string, multi?: boolean, range?: boolean) => {
+    const idx = samples.findIndex(s => s.id === id);
+    setSelectedIds(prev => {
+      if (range && lastSelectedIndex !== null) {
+        const [a, b] = [lastSelectedIndex, idx].sort((x, y) => x - y);
+        const rangeIds = samples.slice(a, b + 1).map(s => s.id);
+        const base = new Set(multi ? prev : []);
+        rangeIds.forEach(x => base.add(x));
+        return Array.from(base);
+      }
+      if (multi) {
+        const set = new Set(prev);
+        set.has(id) ? set.delete(id) : set.add(id);
+        return Array.from(set);
+      }
+      setLastSelectedIndex(idx);
+      return [id];
+    });
+    if (!range) setLastSelectedIndex(idx);
+  }, [samples, lastSelectedIndex]);
+
+  const clearWell = (wellId: string) => {
+    setAssignments(prev => {
+      const clone = { ...prev };
+      delete clone[wellId];
+      return clone;
+    });
+  };
+
+  const onDragStart = (e: DragStartEvent) => {
+    const id = String(e.active.id);
+    if (!selectedIds.includes(id)) {
+      // Start dragging selects the item (single)
+      const idx = samples.findIndex(s => s.id === id);
+      setSelectedIds([id]);
+      setLastSelectedIndex(idx);
+    }
+  };
+
+  const onDragEnd = (e: DragEndEvent) => {
+    const sampleId = String(e.active.id);
+    const dropId = e.over?.id ? String(e.over.id) : null;
+    if (!dropId) return;
+    setAssignments(prev => ({ ...prev, [dropId]: sampleId }));
+  };
+
+  /** Fill helpers */
+  const plateOrderRowMajor = useMemo(() => {
+    const ids: string[] = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) ids.push(toWellId(r, c));
+    return ids;
+  }, []);
+  const plateOrderColMajor = useMemo(() => {
+    const ids: string[] = [];
+    for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) ids.push(toWellId(r, c));
+    return ids;
+  }, []);
+
+  const [startWell, setStartWell] = useState<string>("A1");
+
+  const rotateOrderFromStart = (order: string[], start: string) => {
+    const i = order.indexOf(start);
+    if (i === -1) return order;
+    return order.slice(i).concat(order.slice(0, i));
+    // Note: we don't wrap to next plate; extra samples are ignored, extra wells remain unfilled.
+  };
+
+  const fillWithSelection = (mode: "rows" | "cols") => {
+    if (selectedIds.length !== ROWS * COLS) return;
+    const selectedInDisplayOrder = samples.filter(s => selectedIds.includes(s.id)).map(s => s.id);
+    const order = rotateOrderFromStart(mode === "rows" ? plateOrderRowMajor : plateOrderColMajor, startWell);
+    const next: Assignments = { ...assignments };
+    for (let i = 0; i < order.length; i++) next[order[i]] = selectedInDisplayOrder[i];
+    setAssignments(next);
+  };
+
+  const clearPlate = () => setAssignments({});
+
+  /** Small UX helpers */
+  const allSelectedIs96 = selectedIds.length === ROWS * COLS;
+  const wellIdsFlat = useMemo(() => wells.flat(), [wells]);
+  const unassignedCount = wellIdsFlat.filter(id => !assignments[id]).length;
+
+  return (
+    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 20, padding: 20 }}>
+        {/* Left: Samples panel */}
+        <section style={{ display: "grid", gridTemplateRows: "auto auto 1fr", gap: 12 }}>
+          <div style={{ fontWeight: 600, fontSize: 18 }}>Samples</div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              onClick={() => setSelectedIds(samples.slice(0, ROWS * COLS).map(s => s.id))}
+              style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+              title={`Select first ${ROWS * COLS} samples`}
+            >
+              Select {ROWS * COLS}
+            </button>
+            <button
+              onClick={() => setSelectedIds([])}
+              style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+            >
+              Clear selection
+            </button>
+          </div>
+
+          <div style={{ overflow: "auto", display: "grid", gap: 8, paddingRight: 4, border: "1px solid var(--border)", borderRadius: 10, padding: 10, background: "#fff" }}>
+            {samples.map(s => (
+              <DraggableSample key={s.id} sample={s} selected={selectedIds.includes(s.id)} onToggleSelect={onToggleSelect} />
+            ))}
+          </div>
+        </section>
+
+        {/* Right: Plate + controls */}
+        <section style={{ display: "grid", gridTemplateRows: "auto auto 1fr", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ fontWeight: 600, fontSize: 18 }}>96-well Plate</div>
+            <div style={{ fontSize: 13, opacity: 0.8 }}>Unassigned wells: {unassignedCount}</div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <label style={{ fontSize: 14 }}>
+              Start at:&nbsp;
+              <select
+                value={startWell}
+                onChange={(e) => setStartWell(e.target.value)}
+                style={{ padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)" }}
+              >
+                {wells.flat().map(id => <option key={id} value={id}>{id}</option>)}
+              </select>
+            </label>
+
+            <button
+              disabled={!allSelectedIs96}
+              onClick={() => fillWithSelection("rows")}
+              style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: allSelectedIs96 ? "#fff" : "#f3f3f3" }}
+              title="Fill row by row (A1..A12, B1..B12, ...)"
+            >
+              Fill by Rows
+            </button>
+            <button
+              disabled={!allSelectedIs96}
+              onClick={() => fillWithSelection("cols")}
+              style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: allSelectedIs96 ? "#fff" : "#f3f3f3" }}
+              title="Fill column by column (A1..H1, A2..H2, ...)"
+            >
+              Fill by Columns
+            </button>
+
+            <button
+              onClick={clearPlate}
+              style={{ marginLeft: "auto", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+              title="Clear all assignments"
+            >
+              Clear plate
+            </button>
+          </div>
+
+          {/* Plate grid */}
+          <div style={{ width: "fit-content", padding: 12, border: "1px solid var(--border)", borderRadius: 12, background: "#fff" }}>
+            <div style={{ display: "inline-grid", gridTemplateColumns: `auto repeat(${COLS}, 34px)`, gap: 8 }}>
+              {/* Column headers */}
+              <div />
+              {Array.from({ length: COLS }, (_, c) => (
+                <div key={c} style={{ textAlign: "center", fontSize: 12 }}>{c + 1}</div>
+              ))}
+
+              {/* Rows */}
+              {wells.map((row, r) => (
+                <React.Fragment key={r}>
+                  <div style={{ alignSelf: "center", fontSize: 12, width: 18, textAlign: "right" }}>{toRowLabel(r)}</div>
+                  {row.map((id) => (
+                    <Well key={id} wellId={id} assigned={assignments[id]} onClear={clearWell} />
+                  ))}
+                </React.Fragment>
+              ))}
+            </div>
+
+            {/* Legend / tips */}
+            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
+              • Drag a sample tab onto a well to assign. Double-click a well to clear.<br />
+              • Multi-select with Ctrl/Cmd-click, range-select with Shift-click.<br />
+              • Select exactly {ROWS * COLS} samples to enable Fill by Rows/Columns (starts at chosen well).
+            </div>
+          </div>
+        </section>
+      </div>
+    </DndContext>
+  );
+}
+Run it
+npm i
+npm run dev
+# open http://localhost:3000
+Notes & easy extensions
+Switch to 384 wells: set ROWS=16, COLS=24. The rest adapts automatically.
+
+Prevent duplicates: right now, the same sample can be placed on multiple wells. If you want “one sample -> one well,” then on assignment, remove that sample from any previous well (scan assignments and delete matches).
+
+Show sample labels in wells: replace the “•” in Well with the sample’s short name. If you do, consider truncation/tooltip.
+
+Export/import: serialize assignments to CSV or to Opentrons-style labware filling. Easy to add as buttons.
+
+Validation: when filling 96, you could warn if any wells are pre-filled (currently overwritten).
+
+If you want, I can add a toggle for 96/384, add an export to CSV, and enforce unique placement for each sample.
+
+
+Sources
+You said:
+Can you provide me a zip of the package so I don't have to copy all those files?  I will run npm install on the project after I unzip it.
+ChatGPT said:
+I can’t send you a ZIP file directly,
+but I can package everything into a .zip in our workspace so you can download it.
+
+I’ll create the directory structure with the files I listed, zip it up, and give you a download link.
+
+I’ve packaged the full Next.js project into a ZIP file for you:
+
+Download plate-app.zip
+
+Once you unzip it, run:
+
+npm install
+npm run dev
+to start the app on http://localhost:3000.
+
+
+
+
+
+
+No file chosenNo file chosen
+ChatGPT can make mistakes. Check important info.
+cha
