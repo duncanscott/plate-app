@@ -712,10 +712,10 @@ export default function Page() {
             
             <button
               onClick={clearPlate}
-              style={{ marginLeft: "auto", padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
+              style={{ padding: "6px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}
               title="Clear all assignments"
             >
-              Clear plate
+              Clear Plate
             </button>
           </div>
 
@@ -765,10 +765,9 @@ export default function Page() {
             </div>
 
             <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-              • Drag a sample tab onto a well to assign. Double-click a well to clear.<br />
-              • Multi-select with Ctrl/Cmd-click, range-select with Shift-click.<br />
-              • Select exactly {ROWS * COLS} samples to enable Fill by Rows/Columns (starts at chosen well).<br />
-              • Click wells to select them. Hold Ctrl/Cmd to multi-select. Drag from one well to another to select a rectangle.
+              • Drag samples onto wells to assign. Double-click wells to clear.<br />
+              • Click wells to select samples. Ctrl/Cmd-click for multi-select, drag between wells for rectangle selection.<br />
+              • Select exactly {ROWS * COLS} samples to enable Fill by Rows/Columns buttons.
             </div>
           </div>
         </section>
