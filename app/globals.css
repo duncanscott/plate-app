@@ -2,3 +2,5 @@
 :root { --border:#d0d0d0; --muted:#f7f7f7; --accent:#e6f0ff; --green:#bfe5bf; }
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; }
+
+html { scrollbar-gutter: stable; }
